@@ -1,0 +1,83 @@
+name: Build Linux x86_64
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build Linux x86_64
+
+    runs-on: ubuntu-24.04
+
+    env:
+      ARTIFACT_NAME: Linux-Qt6
+      BUILD_PLATFORM: official
+      BUILD_TYPE: Release
+      CMAKE_PRESET: linux
+
+    steps:
+      ##
+      # SETUP
+      ##
+
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          submodules: true
+
+      - name: Setup dependencies
+        id: setup-dependencies
+        uses: ./.github/actions/setup-dependencies
+        with:
+          build-type: ${{ env.BUILD_TYPE }}
+          artifact-name: Linux
+          qt-version: 6.10.2
+
+      ##
+      # BUILD
+      ##
+
+      - name: Configure project
+        run: |
+          cmake --preset "$CMAKE_PRESET"
+
+      - name: Build
+        run: |
+          cmake --build --preset "$CMAKE_PRESET" --config "$BUILD_TYPE"
+
+      - name: Test
+        run: |
+          ctest --preset "$CMAKE_PRESET" --build-config "$BUILD_TYPE"
+
+      ##
+      # PACKAGE
+      ##
+
+      - name: Get short version
+        id: version
+        run: |
+          echo "version=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Package Linux portable tar.gz
+        uses: ./.github/actions/package/linux
+        with:
+          version: ${{ steps.version.outputs.version }}
+          build-type: ${{ steps.setup-dependencies.outputs.build-type }}
+          artifact-name: Linux
+          qt-version: ${{ steps.setup-dependencies.outputs.qt-version }}
+
+      ##
+      # UPLOAD ARTIFACT
+      ##
+
+      - name: Upload tar.gz
+        uses: actions/upload-artifact@v4
+        with:
+          name: Linux-x86_64-portable
+          path: |
+            *.tar.gz
+            **/*.tar.gz
